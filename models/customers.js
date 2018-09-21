@@ -4,10 +4,11 @@ const {mongoose} = require('./../db/mongoose');
 
 const CustomerSchema = mongoose.Schema({
   email:{
+    unique:true,
     type:String,
     required:true,
-    trim:true,
-    unique:true
+    trim:true
+
   },
   password:{
     type:String,
@@ -24,6 +25,10 @@ const CustomerSchema = mongoose.Schema({
       productName:{
         type:String,
         required:true,
+      },
+      productID:{
+        required:true,
+        type:String
       },
       orderQuantity:{
         type:Number,
@@ -44,9 +49,10 @@ const CustomerSchema = mongoose.Schema({
   ]
 })
 
-CustomerSchema.methods.placeOrder=function(orderQuantity,productName){
+CustomerSchema.methods.placeOrder=function(orderQuantity,productName,productID){
   let customer=this;
   let NewOrder={
+    productID,
     productName,
     orderQuantity,
     orderStatus:'confirmed'
@@ -57,6 +63,32 @@ CustomerSchema.methods.placeOrder=function(orderQuantity,productName){
   }).catch((err)=>{
     return Promise.reject(err);
   })
+}
+
+CustomerSchema.methods.cancelOrder=function(orderID){
+  let customer=this;
+
+  for(let i=0; i<customer.orders.length;i++){
+
+    if(customer.orders[i]._id.equals(mongoose.Types.ObjectId(orderID))){
+      let cancelQty=customer.orders[i].orderQuantity;
+      let cancelProductID=customer.orders[i].productID;
+
+      if(customer.orders[i].orderStatus=='confirmed'){
+        customer.orders[i].orderStatus='Cancelled';
+        return Customer.findByIdAndUpdate(customer._id,customer,{new:true}).then((updatedCust)=>{
+          return Promise.resolve({cancelQty,cancelProductID});
+        }).catch((err)=>{
+            return Promise.reject(err);
+        })
+      }else{
+        return Promise.reject('Bad Request');
+      }
+
+    }
+  }
+  return Promise.reject("unable to cancel Order")
+
 }
 
 CustomerSchema.methods.generateAuthTokenCustomer=function(){

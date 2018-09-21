@@ -20,13 +20,13 @@ let authenticateCustomer=(req,res,next)=>{
     let token=req.header('x-auth');
     Customer.findCustomerByToken(token).then((customer)=>{
       if(!customer){
-        return Promise.reject("th");
+        return Promise.reject();
       }
       req.customer=customer;
       req.token=token;
       next();
     }).catch((err)=>{
-      res.status(401).send("i");
+      res.status(401).send({});
     })
 }
 

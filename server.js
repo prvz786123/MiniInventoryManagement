@@ -13,19 +13,22 @@ const {authenticateCustomer} = require('./middleware/authenticate');
 
 const app=express();
 
+//port initialized
 let port=process.env.PORT || 3000;
 
+//bodyParser middleware
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({extended:true}));
 
+//root route
 app.get('/',(req,res)=>{
   res.send("Home Page")
 })
 
-//Only Employees can post product after successfull authentication
+//Add New Product
+//Only Employees can add new product after successfull authentication
 app.post('/products',authenticateEmployee,(req,res)=>{
 
-    console.log(req.body)
     let productDetails = _.pick(req.body,['name','stock']);
     let newProduct = new Product(productDetails);
     newProduct.save().then((savedProduct)=>{
@@ -37,11 +40,16 @@ app.post('/products',authenticateEmployee,(req,res)=>{
     })
 })
 
+//update stock empDetails
+//Only Employees can update stock after successfull authentication
 app.patch('/products',authenticateEmployee,(req,res)=>{
   let stockUpdateDetails=_.pick(req.body,['productID','newStock'])
   let productID=stockUpdateDetails.productID;
   let newStock=stockUpdateDetails.newStock;
   Product.findById(productID).then((product)=>{
+    if(!product){
+      return res.send("unable to find product")
+    }
     let stock=product.stock+newStock;
     Product.findByIdAndUpdate(productID,{
       $set:{
@@ -55,7 +63,7 @@ app.patch('/products',authenticateEmployee,(req,res)=>{
   })
 })
 
-//it will return all the products details
+//it will return all the product with stock details
 app.get('/products',(req,res)=>{
   Product.find().then((products)=>{
     res.send(products)
@@ -64,11 +72,9 @@ app.get('/products',(req,res)=>{
   })
 })
 
-app.get('/products/:id',(req,res)=>{
-  res.send(req.params.id);
-})
 
-//register new customer
+//New Customer Registration
+
 app.post('/customers',(req,res)=>{
   let customerData = _.pick(req.body,['email','password','name']);
   let customer = new Customer(customerData);
@@ -82,7 +88,8 @@ app.post('/customers',(req,res)=>{
   })
 })
 
-app.post('/customers/login',(req,res)=>{
+//Customer Login with valid credential
+app.patch('/customers/login',(req,res)=>{
   let credentials = _.pick(req.body,['email','password'])
   Customer.findOne({
     email:credentials.email
@@ -102,17 +109,37 @@ app.post('/customers/login',(req,res)=>{
   })
 })
 
+//logout
+//all authentication tokens will be removed
+app.delete('/customers/logout',(req,res)=>{
+    let token=req.header('x-auth');
+    Customer.findCustomerByToken(token).then((customer)=>{
+      if(customer.tokens.length<=0){
+        return res.send("already logged out")
+      }
+      customer.tokens=[];
 
-app.post('/customers/orders',authenticateCustomer,(req,res)=>{
+      customer.save().then((loggedOutcust)=>{
+        res.send("successfully logged out")
+      })
+    }).catch((err)=>{
+      res.send("invalid details");
+    })
+})
+
+//Place New OrderDetails
+//Only valid customers can place order after succe authentication
+app.patch('/customers/orders',authenticateCustomer,(req,res)=>{
 
   let OrderDetails=_.pick(req.body,['productID','orderQty','customerID']);
 
   Product.findById(OrderDetails.productID).then((returnProduct)=>{
-    let updateCustomer;
+    if(!returnProduct){
+      return res.send("Unable to find product")
+    }
     if(returnProduct.stock>=OrderDetails.orderQty){
-      Customer.findById(OrderDetails.customerID).then((returnCustomer)=>{
-        updateCustomer=new Customer(returnCustomer)
-        updateCustomer.placeOrder(OrderDetails.orderQty,returnProduct.name).then((confirmedOrder)=>{
+      Customer.findById(OrderDetails.customerID).then((customer)=>{
+        customer.placeOrder(OrderDetails.orderQty,returnProduct.name,returnProduct._id).then((confirmedOrder)=>{
           returnProduct.stock-=OrderDetails.orderQty;
           Product.findByIdAndUpdate(OrderDetails.productID,returnProduct,{new:true}).then((updatedStockProduct)=>{
             res.send(updatedStockProduct);
@@ -123,7 +150,6 @@ app.post('/customers/orders',authenticateCustomer,(req,res)=>{
         })
     }
     else{
-
       res.send({
         err:"Low Stock",
         msg:`you can order only ${returnProduct.stock}`
@@ -134,6 +160,28 @@ app.post('/customers/orders',authenticateCustomer,(req,res)=>{
   })
 })
 
+//Cancel Order
+//Only customer who has created the order can cancel it
+app.delete('/customers/orders/cancel',authenticateCustomer,(req,res)=>{
+    let orderID=_.pick(req.body,['orderID','productID']).orderID
+
+    req.customer.cancelOrder(orderID).then((cancelDetails)=>{
+        if(!cancelDetails){
+          return res.status(404).send();
+        }
+        Product.findByIdAndUpdate(cancelDetails.cancelProductID,{
+          $inc:{
+            stock:cancelDetails.cancelQty
+          }
+        },{new:true}).then((updatedProduct)=>{
+          res.send(updatedProduct);
+        })
+    }).catch((err)=>{
+      res.status(400).send("err "+err);
+    })
+})
+
+//Employee Registration
 app.post('/employees',(req,res)=>{
   let empDetails=_.pick(req.body,['email','password','employeeName','designation','access'])
   let newEmployee=Employee(empDetails);
@@ -148,6 +196,8 @@ app.post('/employees',(req,res)=>{
   })
 })
 
+//Employee login
+//Only Employees with valid credential can login
 app.post('/employees/login',(req,res)=>{
   let credentials = _.pick(req.body,['email','password']);
 
@@ -167,6 +217,7 @@ app.post('/employees/login',(req,res)=>{
   })
 })
 
+//start app on port
 app.listen(port,()=>{
   console.log('server started on '+port)
 })
