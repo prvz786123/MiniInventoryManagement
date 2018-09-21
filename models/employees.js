@@ -48,7 +48,6 @@ EmployeeSchema.methods.generateAuthTokenEmployee=function(){
     id,
     access
   }
-
   let token = jwt.sign(TokenDetails,'secretkey');
 
   employee.tokens.unshift({token,access})

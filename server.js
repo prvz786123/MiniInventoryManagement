@@ -131,30 +131,37 @@ app.delete('/customers/logout',(req,res)=>{
 //Only valid customers can place order after succe authentication
 app.patch('/customers/orders',authenticateCustomer,(req,res)=>{
 
-  let OrderDetails=_.pick(req.body,['productID','orderQty','customerID']);
+  let OrderDetails=_.pick(req.body,['productID','orderQuantity','customerID']);
 
-  Product.findById(OrderDetails.productID).then((returnProduct)=>{
-    if(!returnProduct){
+    Product.findById(OrderDetails.productID).then((product)=>{
+    if(!product){
       return res.send("Unable to find product")
     }
-    if(returnProduct.stock>=OrderDetails.orderQty){
+
+    if(product.stock>=OrderDetails.orderQuantity){
+      OrderDetails.orderStatus='confirmed'
+    }else{
+      OrderDetails.orderStatus='cancelled'
+    }
+    OrderDetails.productName=product.name;
       Customer.findById(OrderDetails.customerID).then((customer)=>{
-        customer.placeOrder(OrderDetails.orderQty,returnProduct.name,returnProduct._id).then((confirmedOrder)=>{
-          returnProduct.stock-=OrderDetails.orderQty;
-          Product.findByIdAndUpdate(OrderDetails.productID,returnProduct,{new:true}).then((updatedStockProduct)=>{
+        customer.placeOrder(OrderDetails).then((placedOrder)=>{
+            console.log(placedOrder);
+          if(placedOrder.orderStatus=='confirmed'){
+
+              product.stock-=OrderDetails.orderQuantity;
+          }
+          Product.findByIdAndUpdate(OrderDetails.productID,product,{new:true}).then((updatedStockProduct)=>{
             res.send(updatedStockProduct);
+          }).catch((err)=>{
+            res.send("err3"+err);
           })
+        }).catch((err)=>{
+          res.send("err2"+err);
         })
       }).catch((err)=>{
-          res.send(err);
-        })
-    }
-    else{
-      res.send({
-        err:"Low Stock",
-        msg:`you can order only ${returnProduct.stock}`
+        res.send("err 1"+err);
       })
-    }
   }).catch((err)=>{
     res.send("err"+err);
   })

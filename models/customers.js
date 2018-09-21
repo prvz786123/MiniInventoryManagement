@@ -49,19 +49,16 @@ const CustomerSchema = mongoose.Schema({
   ]
 })
 
-CustomerSchema.methods.placeOrder=function(orderQuantity,productName,productID){
+CustomerSchema.methods.placeOrder=function(NewOrder){
   let customer=this;
-  let NewOrder={
-    productID,
-    productName,
-    orderQuantity,
-    orderStatus:'confirmed'
-  }
   customer.orders.unshift(NewOrder)
-  return customer.save().then((successOrderCustDetails)=>{
-    return Promise.resolve(successOrderCustDetails);
+  return customer.save().then((PlacedOrder)=>{
+    if(!PlacedOrder){
+      return Promise.reject("unable to place order");
+    }
+    return Promise.resolve(NewOrder);
   }).catch((err)=>{
-    return Promise.reject(err);
+    return Promise.reject("err"+err);
   })
 }
 
@@ -69,7 +66,6 @@ CustomerSchema.methods.cancelOrder=function(orderID){
   let customer=this;
 
   for(let i=0; i<customer.orders.length;i++){
-
     if(customer.orders[i]._id.equals(mongoose.Types.ObjectId(orderID))){
       let cancelQty=customer.orders[i].orderQuantity;
       let cancelProductID=customer.orders[i].productID;
@@ -126,6 +122,8 @@ CustomerSchema.statics.findCustomerByToken=function(token){
 }
 
 let Customer = mongoose.model('customers',CustomerSchema);
+
+
 
 module.exports={
  Customer
